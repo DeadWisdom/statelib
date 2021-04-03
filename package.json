@@ -1,0 +1,18 @@
+{
+  "name": "state-lib",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "web-test-runner \"test/**/*.test.js\" --node-resolve"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@esm-bundle/chai": "^4.3.4",
+    "@web/dev-server-esbuild": "^0.2.11",
+    "@web/test-runner": "^0.12.18",
+    "y-indexeddb": "^9.0.6",
+    "yjs": "^13.5.4"
+  }
+}
