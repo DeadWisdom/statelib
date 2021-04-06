@@ -1,105 +1,152 @@
 import * as Y from "yjs";
+import { uuidv4 as randomId } from "lib0/random.js";
 import { IndexeddbPersistence } from "y-indexeddb";
 import {
   Provider,
-  DocumentState,
   PropertyMap,
   getPropertyMap,
   DocumentUpdateCallback,
   UnsubscribeCallback,
-} from "../state";
-import { writeDocumentStateVector } from "yjs/dist/src/internals";
+  Storable,
+} from "../provider";
+
+function setYMap(map: Y.Map<Storable>, newState: PropertyMap) {
+  if (newState === undefined) return;
+  let props = getPropertyMap(newState);
+
+  props.forEach((v, k) => {
+    map.set(k, v);
+  });
+
+  let remove = [];
+  for (const key of map.keys()) {
+    if (!props.has(key)) {
+      remove.push(key);
+    }
+  }
+
+  remove.forEach((k) => map.delete(k));
+}
+
+export type MapEventCallback = (arg0: any, arg1: Y.Transaction) => void;
 
 export class YJSProvider implements Provider {
   name: string;
-  _internalDocs: Map<string, Y.Doc>;
-  _subscriptions: Map<string, DocumentUpdateCallback[]>;
+  private _yDoc: Y.Doc;
+  private _yProviders: any[];
+  private _subscriptions: Map<string, Map<DocumentUpdateCallback, MapEventCallback>>;
 
-  constructor(name: string) {
+  constructor(name: string, yDoc?: Y.Doc, yProviders?: any[]) {
     this.name = name;
-    this._internalDocs = new Map();
+    this._yDoc = yDoc || new Y.Doc();
+    if (yProviders !== undefined) {
+      this._yProviders = yProviders;
+    } else {
+      this._yProviders = [new IndexeddbPersistence(this.name, this._yDoc)];
+    }
     this._subscriptions = new Map();
   }
 
-  _getInternalDoc(guid?: string): Y.Doc {
-    let yDoc = this._internalDocs.get(guid);
-    if (yDoc === undefined) {
-      yDoc = new Y.Doc({ guid });
-      this._internalDocs.set(yDoc.guid, yDoc);
+  // Internal
+  private _getSubscriptions(key: string) {
+    let subs = this._subscriptions.get(key);
+    if (subs === undefined) {
+      subs = new Map();
+      this._subscriptions.set(key, subs);
     }
-    return yDoc;
+    return subs;
+  }
+
+  // Meta
+  async whenReady() {
+    for (let provider of this._yProviders) {
+      if (!provider.synced) await provider.whenSynced;
+    }
+  }
+
+  destroyAll() {
+    this._yDoc.destroy();
   }
 
   // Documents
-  async documentLoad(state: DocumentState): Promise<DocumentState> {
-    if (state.loaded) return state;
-    let yDoc = this._getInternalDoc(state.key);
-    state.key = yDoc.guid;
-    let p = new IndexeddbPersistence(this.name, yDoc);
-    await p.whenSynced;
-    state.loaded = true;
-    return state;
-  }
-
-  documentUnload(state: DocumentState): void {
-    let yDoc = this._internalDocs.get(state.key);
-    if (yDoc !== undefined) yDoc.destroy();
-    state.loaded = false;
-  }
-
-  async documentCreate(props: PropertyMap, key?: string): Promise<DocumentState> {
-    let yDoc = this._getInternalDoc(key);
-    return new DocumentState(this, yDoc.guid, props);
-  }
-
-  async documentSave(state: DocumentState, props: PropertyMap): Promise<DocumentState> {
-    await this.documentLoad(state);
-    let yDoc = this._getInternalDoc(state.key);
-    let yMap = yDoc.getMap("properties");
-    let propertyMap = getPropertyMap(props);
-    propertyMap.forEach((v, k) => {
-      yMap.set(k, v);
-    });
-
-    let remove = [];
-    for (const key of yMap) {
-      if (!propertyMap.has(key)) {
-        remove.push(key);
-      }
+  async docSave(key: string | null, props: PropertyMap): Promise<string> {
+    await this.whenReady();
+    if (key === null) {
+      key = randomId();
     }
-    remove.forEach((k) => yMap.delete(k));
-  }
-
-  async documentDelete(doc: DocumentState): Promise<DocumentState> {
-    let provider = new IndexeddbPersistence(doc.key, this._getInternalDoc(doc.key));
-    provider.clearData();
-    this.documentUnload(doc);
-    return doc;
-  }
-
-  documentSubscribe(doc: DocumentState, callback: DocumentUpdateCallback): UnsubscribeCallback {
-    this.documentLoad(doc).then(() => {
-      callback({ document: doc, updated: doc.value, added: [], removed: [] });
+    let map = this._yDoc.getMap(key as string);
+    this._yDoc.transact((transaction: Y.Transaction) => {
+      setYMap(map, props);
     });
-    let sub = this._subscriptions.get(doc.key) || [];
-    this._subscriptions.set(doc.key, sub.filter((v) => v !== callback).concat([callback]));
+    return key as string;
+  }
+
+  async docLoad(key: string): Promise<Map<string, Storable> | null> {
+    await this.whenReady();
+    let map = this._yDoc.getMap(key);
+    if (map === undefined) null;
+    return new Map(map.entries());
+  }
+
+  async docDelete(key: string): Promise<boolean> {
+    // Doesn't delete the key, unfortunately.
+    let map = this._yDoc.getMap(key);
+    if (map === undefined) return false;
+    this._yDoc.transact((transaction: Y.Transaction) => {
+      setYMap(map, new Map());
+    });
+    return true;
+  }
+
+  docSubscribe(key: string, callback: DocumentUpdateCallback, warm: boolean = false): UnsubscribeCallback {
+    if (warm) {
+      this.whenReady().then(() => {
+        let value: PropertyMap = new Map(this._yDoc.getMap(key).entries());
+        callback({ key: key, value: value, changed: undefined, added: [], removed: [] });
+      });
+    }
+
+    let map = this._yDoc.getMap(key);
+    let subs = this._getSubscriptions(key);
+    if (subs.has(callback))
+      return () => {
+        this.docUnsubscribe(key, callback);
+      };
+
+    let callbackWrapper = (event: any, transaction: Y.Transaction) => {
+      // Getting the info we want is complicated...
+      let changed = new Map();
+      let removed: string[] = [];
+      let added: string[] = [];
+      let value: PropertyMap = new Map(event.target.entries());
+      event.changes.keys.forEach((change: any, key: string) => {
+        if (change.action == "add") {
+          added.push(key);
+          changed.set(key, undefined);
+        } else if (change.action == "delete") {
+          removed.push(key);
+          changed.set(key, change.oldValue);
+        } else {
+          changed.set(key, change.oldValue);
+        }
+      });
+      return callback({ key, value, changed, added, removed });
+    };
+    subs.set(callback, callbackWrapper);
+    map.observe(callbackWrapper);
     return () => {
-      this.documentUnsubscribe(doc, callback);
+      this.docUnsubscribe(key, callback);
     };
   }
 
-  documentUnsubscribe(doc: DocumentState, callback: DocumentUpdateCallback): void {
-    let sub = this._subscriptions.get(doc.key);
+  docUnsubscribe(key: string, callback: DocumentUpdateCallback): void {
+    let sub = this._subscriptions.get(key);
     if (sub === undefined) return;
-    this._subscriptions.set(
-      doc.key,
-      sub.filter((v) => v !== callback)
-    );
-  }
+    let wrapper = sub.get(callback);
+    if (wrapper === undefined) return;
 
-  getDoc(key: string, props?: PropertyMap): DocumentState {
-    let yDoc = this._getInternalDoc(key);
-    return new DocumentState(this, key, props);
+    this._yDoc.get(key).unobserve(wrapper);
+    sub.delete(callback);
   }
 
   /*
