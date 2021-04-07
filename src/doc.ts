@@ -2,6 +2,7 @@ const providerSymbol = Symbol("provider");
 
 export class StateDoc {
   static finalized: boolean = false;
+  static getKey: (doc:StateDoc) => string;
 
   constructor(provider: unknown) {
     if (!(this.constructor as any).finalized) (this.constructor as any).finalize();
@@ -18,8 +19,25 @@ export class StateDoc {
   }
 
   static finalize() {
+    let properties = (this as any).properties!;
     this.finalized = true;
+    Object.keys(properties).forEach(key => {
+      let config = properties[key];
+      if (config.key) {
+        this.getKey = propCurry(key);
+      }
+      Object.defineProperty(this, providerSymbol, {
+        value: provider,
+        writable: false,
+        configurable: false,
+        enumerable: false,
+      });
+    });
   }
+}
+
+function propCurry(propName:string) {
+  return (obj:any) => obj[propName];
 }
 
 export function field(options: any) {
