@@ -46,7 +46,8 @@ export interface Provider {
    * Load the data of the document.
    * 
    * @returns a promise with the properties as a Map, or null if the document
-   *          does not yet exist.
+   *          does not yet exist. Some providers will not be able to tell if
+   *          the document exists, so may just return an empty map.
    */
   docLoad(key: string): Promise<Map<string, Storable> | null> 
 

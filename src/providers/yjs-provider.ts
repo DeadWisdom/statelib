@@ -9,6 +9,7 @@ import {
   UnsubscribeCallback,
   Storable,
 } from "../provider";
+import { SubscriptionService } from "../subscription";
 
 function setYMap(map: Y.Map<Storable>, newState: PropertyMap) {
   if (newState === undefined) return;
@@ -34,7 +35,7 @@ export class YJSProvider implements Provider {
   name: string;
   private _yDoc: Y.Doc;
   private _yProviders: any[];
-  private _subscriptions: Map<string, Map<DocumentUpdateCallback, MapEventCallback>>;
+  private _subscriptions: Map<string, SubscriptionService<DocumentUpdateCallback>>;
 
   constructor(name: string, yDoc?: Y.Doc, yProviders?: any[]) {
     this.name = name;
@@ -48,13 +49,34 @@ export class YJSProvider implements Provider {
   }
 
   // Internal
-  private _getSubscriptions(key: string) {
-    let subs = this._subscriptions.get(key);
-    if (subs === undefined) {
-      subs = new Map();
-      this._subscriptions.set(key, subs);
+  private _getSubscriptionService(key: string) {
+    let srv = this._subscriptions.get(key);
+    if (srv === undefined) {
+      srv = new SubscriptionService(this.yEventAdapter(key));
+      this._subscriptions.set(key, srv);
     }
-    return subs;
+    return srv;
+  }
+
+  yEventAdapter(key: string) {
+    return (callback: DocumentUpdateCallback, event: any, transaction: Y.Transaction) => {
+      let changed = new Map();
+      let removed: string[] = [];
+      let added: string[] = [];
+      let value: PropertyMap = new Map(event.target.entries());
+      event.changes.keys.forEach((change: any, key: string) => {
+        if (change.action == "add") {
+          added.push(key);
+          changed.set(key, undefined);
+        } else if (change.action == "delete") {
+          removed.push(key);
+          changed.set(key, change.oldValue);
+        } else {
+          changed.set(key, change.oldValue);
+        }
+      });
+      return callback({ key, value, changed, added, removed });
+    };
   }
 
   // Meta
@@ -107,46 +129,24 @@ export class YJSProvider implements Provider {
     }
 
     let map = this._yDoc.getMap(key);
-    let subs = this._getSubscriptions(key);
-    if (subs.has(callback))
-      return () => {
-        this.docUnsubscribe(key, callback);
-      };
+    let srv = this._subscriptions.get(key);
 
-    let callbackWrapper = (event: any, transaction: Y.Transaction) => {
-      // Getting the info we want is complicated...
-      let changed = new Map();
-      let removed: string[] = [];
-      let added: string[] = [];
-      let value: PropertyMap = new Map(event.target.entries());
-      event.changes.keys.forEach((change: any, key: string) => {
-        if (change.action == "add") {
-          added.push(key);
-          changed.set(key, undefined);
-        } else if (change.action == "delete") {
-          removed.push(key);
-          changed.set(key, change.oldValue);
-        } else {
-          changed.set(key, change.oldValue);
-        }
-      });
-      return callback({ key, value, changed, added, removed });
-    };
-    subs.set(callback, callbackWrapper);
-    map.observe(callbackWrapper);
-    return () => {
-      this.docUnsubscribe(key, callback);
-    };
+    // Build subscription service
+    if (srv === undefined) {
+      srv = new SubscriptionService(
+        this.yEventAdapter(key),
+        (next: any) => map.observe(next),
+        (next: any) => map.unobserve(next)
+      );
+      this._subscriptions.set(key, srv);
+    }
+
+    return srv.subscribe(callback);
   }
 
   docUnsubscribe(key: string, callback: DocumentUpdateCallback): void {
-    let sub = this._subscriptions.get(key);
-    if (sub === undefined) return;
-    let wrapper = sub.get(callback);
-    if (wrapper === undefined) return;
-
-    this._yDoc.get(key).unobserve(wrapper);
-    sub.delete(callback);
+    let srv = this._subscriptions.get(key);
+    if (srv) srv.unsubscribe(callback);
   }
 
   /*
