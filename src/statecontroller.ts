@@ -1,25 +1,35 @@
 import { Provider, Storable } from "./provider";
+import { EventStream } from "./reactor";
 
 interface ControllerHost {
   addController(controller:Controller): void;
 }
 
-interface StateDoc {
-  provider: any;
+interface Doc extends EventStream {
+  collection: Collection;
   key: any;
   cache: Map<string, Storable>;
 
-  constructor(provider:Provider, key:any): StateDoc;
+  constructor(collection:Collection, key:any): Doc;
 
   get(key: string): Storable;
   set(key: string, val: Storable): void;
   update(props:Object): void;
   update(props:Map<string, Storable>): void;
   has(key: string): boolean;
-  save(options:any): Promise<StateDoc>;
-  load(options:any): Promise<StateDoc>;
-  delete(options:any): Promise<StateDoc>;
-  subscribe(callback:any): Function;
+
+  save(options:any): Promise<Doc>;
+  load(options:any): Promise<Doc>;
+  delete(options:any): Promise<Doc>;
+}
+
+interface Collection extends EventStream {
+  changes: EventStream;
+  provider: any;
+  filter: any;
+  cache: Map<string, Doc>;
+
+  constructor(): Collection;
 }
 
 export class BaseController {
@@ -78,3 +88,4 @@ export class PropController extends DocController {
     // Save...
   }
 }
+
