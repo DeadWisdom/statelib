@@ -1,7 +1,16 @@
 import { expect } from "@esm-bundle/chai";
 
+/*
+  A ReactorStream holds the latest event like a value, and gives you a promise
+  for the next value.
+
+  A Reactor listens, runs a callback, and then ends.
+  Or listens, runs a callback over and over, and then ends.
+*/
+
 class Reactor {
   _listening = false;
+  _trash = new Set();     // Call all functions and clear this when we dispose, some might be subscriptions, some might be reject()s in the promises.
 
   constructor(target, events, listenerOptions) {
     this._streams = [];
@@ -29,8 +38,13 @@ class Reactor {
     });
   }
 
-  async once(callback) {
+  once(callback) {
     this.listen();
+    return new Promise((resolve, reject) => {
+      this._trash.add(reject);
+      callback(this).then(resolve).catch(reject);
+      this.dispose();
+    });
     try {
       return await callback(this);
     } finally {
@@ -110,6 +124,84 @@ class ReactorStream {
   get happened() {
     return this._last_event !== undefined;
   }
+}
+
+class Signal {
+  /* Things to test: 
+        - do promises really get garbage collected
+        - is adding and removing an event listener faster than just ignoring events  
+  */
+  constructor(target, ...types) {
+
+  }
+
+  async next() {
+
+  }
+
+  async details() {
+
+  }
+}
+
+class Reactor {
+  constructor() {}
+
+  next(stream) {
+    return new Promise((resolve, reject) => {
+      this._reject = reject;
+      let cleanUp = null;
+      try {
+        cleanUp = stream.subscribe(resolve);
+      } finally {
+        if (cleanUp) {
+          if (typeof cleanUp.unsubscribe) { cleanUp.unsubscribe() }
+          else { cleanUp(); }
+        }
+      }
+    });
+  }
+
+  loopUntil(stream, callback) {
+    let listening = false;
+    this.next(stream).then(value => {
+      listening = false;
+    });
+    while(listening) {
+      callback(this);
+    }
+  }
+
+  async delay() {
+    await true;
+  }
+
+  dispose() {
+    if (this._reject) {
+      this._reject();
+    }
+  }
+
+  static once(callback) {
+    callback(new this());
+  }
+}
+
+class EventStream {
+  constructor(target, ...types) {
+
+  }
+}
+
+
+function promiseEvent(target, type) {
+  return new Promise((resolve, reject) => {
+    let callback = (evt) => {
+      resolve(evt);
+      target.removeEventListener(type, callback);
+    };
+    target.addEventListener(type, callback);
+  });
 }
 
 function createStream(target, eventType, listenerOptions) {
@@ -219,4 +311,13 @@ it("reactor lifecycle", async () => {
   expect(detail.name).to.equal("test");
 });
 
-let foo = function () {};
+xit("reactor as a controller", () => {
+  class ReactorController {
+    constructor(host) {
+      this.host = host;
+      host.addController(this);
+    }
+
+    hostConnected() {}
+  }
+});
