@@ -1,22 +1,22 @@
 import { Provider, Storable } from "./provider";
 import { EventStream } from "./reactor";
 
-interface ControllerHost {
+export interface ControllerHost {
   addController(controller: BaseController): void;
 }
 
-interface SyncPropOptions {
+export interface SyncPropOptions {
   provider: Provider;
   keyProp: string;
   syncProp: string;
 }
 
-interface Doc extends EventStream {
+export interface Doc extends EventStream {
   collection: Collection;
   key: any;
   cache: Map<string, Storable>;
 
-  constructor(collection:Collection, key:any): Doc;
+  constructor(collection: Collection, key: any): Doc;
 
   get(key: string): Storable;
   set(key: string, val: Storable): void;
@@ -24,12 +24,12 @@ interface Doc extends EventStream {
   update(props: Map<string, Storable>): void;
   has(key: string): boolean;
 
-  save(options:any): Promise<Doc>;
-  load(options:any): Promise<Doc>;
-  delete(options:any): Promise<Doc>;
+  save(options: any): Promise<Doc>;
+  load(options: any): Promise<Doc>;
+  delete(options: any): Promise<Doc>;
 }
 
-interface Collection extends EventStream {
+export interface Collection extends EventStream {
   changes: EventStream;
   provider: any;
   filter: any;
@@ -68,8 +68,8 @@ export class DocController extends BaseController {
 
   hostUpdate(changedProps: Map<string, any>): void {
     if (changedProps.has(this._keyProp)) {
-      this.unsubscribe();
-      this.subscribe();
+      // this.unsubscribe();
+      //this.subscribe();
     }
   }
 

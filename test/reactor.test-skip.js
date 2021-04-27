@@ -183,7 +183,18 @@ class Reactor {
   }
 
   static once(callback) {
+    // Okay, during the callback I can hook the calls for each stream and
+    // then build out our dependencies.
+    // Events can then move through the system in a determinate way avoiding 
+    // (most) glitches.
     callback(new this());
+  }
+
+  static loop(callback) {
+    let instance = new this();
+    while (true) {
+      callback(instance);
+    }
   }
 }
 
@@ -321,3 +332,77 @@ xit("reactor as a controller", () => {
     hostConnected() {}
   }
 });
+
+let [state, setState] = useState();
+
+{state}
+
+changes = Reactor.hostChanges(this);
+
+reactors = [
+  Reactor.loop(this, async (reactor) => {
+    let changeEvent = await reactor.next(userState);
+    if (changeEvent.changed.has('name'))
+      this.name = changeEvent.changed.get('name');
+  }),
+  Reactor.once(this, async (reactor) => {
+    await reactor.nextEvent(window, 'close');
+    this.kill();
+  }),
+  Reactor.sync(this, 'user', userState);
+];
+
+Reactor.once(this, async (reactor) => {
+  await this.updateComplete;
+  
+});
+
+Reactor.loop(this, this.loopThing);
+
+
+Reactor.sync(this, 'user', userState);
+
+let userState = new State({
+  name: string
+});
+
+
+userState.update({
+  'name': 'philip'
+});
+
+user = userState.ref();
+
+
+
+/*
+let timeout = () => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 2000);
+  })
+}
+let waiter = async () => {
+  await timeout();
+  console.log("waiting done.");
+}
+let reactor = (signal) => {
+  return new Promise((resolve, reject) => {
+    console.log("reactor started");
+    signal.addEventListener('abort', () => {
+      console.log("abort");
+      reject("aborted");
+    });
+    waiter().then(resolve);
+    console.log("reactor finished");
+  })
+}
+let controller = new window.AbortController();
+reactor(controller.signal).then(() => {
+  console.log("done.");
+}).catch((e) => {
+  console.log('error', e);
+});
+setTimeout(() => {
+  controller.abort();
+}, 1000);
+*/
