@@ -1,31 +1,57 @@
 export type EventCallback = (event: any) => void;
 
-export interface Unsubscribable {
+export interface ISubscribable {
+  subscribe(callback: EventCallback): Subscription;
+  unsubscribe(callback: EventCallback): void;
+  dispose(): void;
+}
+
+export interface IEventStream {
+  subscribe(callback: EventCallback): Subscription;
+  unsubscribe(callback: EventCallback): void;
+  send(event: any): void;
+  dispose(): void;
+}
+
+export interface CallbackUnsubscribable {
   unsubscribe(callback: Function): void;
 }
 
 export class Subscription {
-  source: Unsubscribable;
+  source: CallbackUnsubscribable;
   callback: EventCallback;
+  teardown:Function[] = [];
 
-  constructor(sub: Unsubscribable, callback: EventCallback) {
+  constructor(sub: CallbackUnsubscribable, callback: EventCallback, teardown?: Function) {
     this.source = sub;
     this.callback = callback;
+    if (teardown)
+      this.teardown.push(teardown);
+  }
+
+  onDispose(teardown:Function) {
+    this.teardown.push(teardown);
   }
 
   dispose() {
+    this.teardown.forEach(t => t(this));
+    this.teardown = [];
     this.source.unsubscribe(this.callback);
+  }
+
+  unsubscribe() {
+    this.dispose()
   }
 }
 
-export class EventStream {
+export class EventStream implements IEventStream {
   _subscribers: Map<EventCallback, Subscription> = new Map();
 
-  subscribe(callback: EventCallback): Subscription {
+  subscribe(callback: EventCallback, teardown?: Function): Subscription {
     if (this._subscribers.has(callback)) {
       return this._subscribers.get(callback)!;
     }
-    let sub = new Subscription(this, callback);
+    let sub = new Subscription(this, callback, teardown);
     this._subscribers.set(callback, sub);
     if (this._subscribers.size == 1) {
       this.onFirstSubscriber();
@@ -49,6 +75,14 @@ export class EventStream {
 
   onFirstSubscriber() {}
   onLastSubscriber() {}
+
+  dispose() {
+    if (this._subscribers.size == 0) return;
+    this._subscribers.forEach(s => {
+      s.dispose();
+    })
+    this._subscribers.clear();
+  }
 }
 
 export class EventListenerStream extends EventStream {
@@ -101,5 +135,12 @@ export class EventStreamProxy extends EventStream {
 
   onLastSubscriber() {
     this._parentSub?.dispose();
+  }
+}
+
+export class PromiseStream extends EventStream {
+  constructor(promise:Promise<any>) {
+    super();
+    promise.then(this.send.bind(this));
   }
 }

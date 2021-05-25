@@ -23,7 +23,7 @@ export interface DocumentUpdate {
 }
 
 //prettier-ignore
-export interface Provider {
+export interface DocProvider {
   /**
    * Destroys the provider data, probably not able to be undone.
    * The state of this provider will thereafter be undefined.
@@ -31,16 +31,11 @@ export interface Provider {
   destroyAll(): void;
 
   /**
-   * Returns a promise that returns when the Provider is ready and loaded.
-   */
-  whenReady(): void;
-
-  /**
    * Save a document with the given key, or if null, a key is generated.
    * 
    * @returns a promise with the final key
    */
-  docSave(key: string | null, props: PropertyMap): Promise<string>;
+  docSave(key: any, props: PropertyMap): Promise<string>;
 
   /**
    * Load the data of the document.
@@ -49,14 +44,14 @@ export interface Provider {
    *          does not yet exist. Some providers will not be able to tell if
    *          the document exists, so may just return an empty map.
    */
-  docLoad(key: string): Promise<Map<string, Storable> | null> 
+  docLoad(key: any): Promise<Map<string, Storable> | null> 
 
   /**
    * Delete a document with the given key
    * 
    * @returns A promise which indicates if it was deleted or not
    */
-  docDelete(key: string): Promise<boolean>;
+  docDelete(key: any): Promise<boolean>;
 
   /**
    * Subscribe to the document with the given key. Will immediately call the 
@@ -65,12 +60,12 @@ export interface Provider {
    * @param warm set to false to disable updating the callback on subscription
    * @returns a function that will cancel the subscription
    */
-  docSubscribe(key: string, callback: DocumentUpdateCallback, warm?:boolean): UnsubscribeCallback;
+  docSubscribe(key: any, callback: DocumentUpdateCallback, warm?:boolean): UnsubscribeCallback;
 
   /**
    * Unsubscribe from updates for the key with the callback
    */
-  docUnsubscribe(key: string, callback: DocumentUpdateCallback): void;
+  docUnsubscribe(key: any, callback: DocumentUpdateCallback): void;
 }
 
 /*
