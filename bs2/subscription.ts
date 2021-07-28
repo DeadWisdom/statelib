@@ -12,6 +12,7 @@ export class SubscriptionService<CallbackSignature> {
     start?: (sub: Function) => void,
     end?: (sub: Function) => void
   ) {
+    console.log("CONSTRUCTION");
     this.callbacks = new Set();
     this.adapter = adapter;
     this.start = start;
@@ -31,6 +32,7 @@ export class SubscriptionService<CallbackSignature> {
 
   subscribe(callback: CallbackSignature): () => void {
     if (this.subscribers == 0 && this.start) {
+      console.log("SUB CRI", JSON.stringify(this.send));
       this.start(this.send);
     }
     this.subscribers = this.callbacks.size;
