@@ -23,7 +23,9 @@
     "yjs": "^13.5.4"
   },
   "dependencies": {
-    "lit": "^2.0.0-rc.2",
-    "zen-observable-ts": "^1.0.0"
+    "xactor": "^0.3.1"
+  },
+  "prettier": {
+    "printWidth": 100
   }
 }
