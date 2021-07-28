@@ -20,7 +20,7 @@ export interface CallbackUnsubscribable {
 export class Subscription {
   source: CallbackUnsubscribable;
   callback: EventCallback;
-  teardown:Function[] = [];
+  teardown:Function[] = []; 
 
   constructor(sub: CallbackUnsubscribable, callback: EventCallback, teardown?: Function) {
     this.source = sub;

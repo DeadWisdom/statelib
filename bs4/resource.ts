@@ -89,6 +89,12 @@ class Doc extends Resource {
     return this;
   }
 
+  async load(options?: any): Promise<Doc> {
+    let data = await this.collection.docLoad(this.key, options);
+    this.cache = getPropertyMap(data);
+    this.send();
+  }
+
   onChange(update: DocumentUpdate) {
     this.send(update);
   }

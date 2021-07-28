@@ -362,18 +362,6 @@ Reactor.loop(this, this.loopThing);
 
 Reactor.sync(this, 'user', userState);
 
-let userState = new State({
-  name: string
-});
-
-
-userState.update({
-  'name': 'philip'
-});
-
-user = userState.ref();
-
-
 
 /*
 let timeout = () => {

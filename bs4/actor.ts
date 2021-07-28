@@ -68,3 +68,19 @@ export function adaptActor(actorLike:ActorLike): EventStream {
     return actor;
   }
 }
+
+
+const channel = (send) => {
+  return {
+    onUpdate(msg:any) {
+      
+    },
+
+    onConn
+
+    onDisconnect() {
+
+    }
+  }
+}
+
